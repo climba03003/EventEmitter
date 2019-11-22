@@ -31,6 +31,9 @@
     "pretest": "npm run build",
     "test": "npx istanbul cover _mocha -- --recursive"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/climba03003/EventEmitter.git"
