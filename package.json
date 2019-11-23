@@ -14,11 +14,13 @@
     "@types/node": "^12.12.0",
     "@typescript-eslint/eslint-plugin": "^2.8.0",
     "@typescript-eslint/parser": "^2.8.0",
+    "coveralls": "^3.0.8",
     "eslint": "^6.6.0",
     "eslint-config-prettier": "^6.7.0",
     "eslint-plugin-prettier": "^3.1.1",
     "istanbul": "^0.4.5",
     "mocha": "^6.2.2",
+    "mocha-lcov-reporter": "^1.3.0",
     "prettier": "^1.19.1",
     "should": "^13.2.3",
     "typescript": "^3.6.4"
@@ -29,7 +31,9 @@
     "prebuild": "npm install",
     "build": "npx tsc",
     "pretest": "npm run build",
-    "test": "npx istanbul cover _mocha -- --recursive"
+    "test": "npx istanbul cover _mocha -- --recursive",
+    "precoveralls": "npm run build",
+    "coveralls": "npx istanbul cover _mocha --report lcovonly -- --recursive -R spec && cat ./coverage/lcov.info | npx coveralls && rm -rf ./coverage"
   },
   "publishConfig": {
     "access": "public"
