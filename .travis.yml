@@ -18,20 +18,20 @@ jobs:
       before_deploy:
         - npm run build
       deploy:
-        provider: npm
-        email: "$NPM_EMAIL"
-        api_key: "$NPM_API_TOKEN"
-        edge:
-          branch: master
-        skip_cleanup: true
-        on:
-          branch: release
-        provider: npm
-        registry: https://npm.pkg.github.com
-        email: "$GITHUB_EMAIL"
-        api_key: "$GITHUB_API_TOKEN"
-        edge:
-          branch: master
-        skip_cleanup: true
-        on:
-          branch: release
+        - provider: npm
+          email: "$NPM_EMAIL"
+          api_key: "$NPM_API_TOKEN"
+          edge:
+            branch: master
+          skip_cleanup: true
+          on:
+            branch: release
+        - provider: npm
+          registry: https://npm.pkg.github.com
+          email: "$GITHUB_EMAIL"
+          api_key: "$GITHUB_API_TOKEN"
+          edge:
+            branch: master
+          skip_cleanup: true
+          on:
+            branch: release
