@@ -3,7 +3,7 @@ import * as should from 'should';
 import * as crypto from 'crypto';
 import EventEmitter from '../lib';
 
-function tick() {
+function tick(): Promise<unknown> {
   return new Promise(function(resolve) {
     setTimeout(function() {
       resolve();
@@ -46,6 +46,15 @@ describe('EventEmitter', function() {
         .be.an.Array()
         .and.length(1)
         .and.containEql(tick);
+    });
+
+    it('event stack should throw error', function() {
+      const Emitter = new EventEmitter();
+      Emitter.setMaxListeners(1);
+      should(function() {
+        Emitter.addListener('exceed', tick);
+        Emitter.addListener('exceed', tick);
+      }).throwError('Maximum Number of Event Listener exceed.');
     });
   });
 
@@ -159,7 +168,7 @@ describe('EventEmitter', function() {
     const eventName = crypto.randomBytes(4).toString('hex');
     it('event stack not contain anything', function() {
       Emitter.on(eventName, tick);
-      Emitter.removeListener(eventName, tick);
+      Emitter.off(eventName, tick);
       should(Emitter.listeners(eventName))
         .is.Array()
         .and.length(0);
@@ -193,18 +202,18 @@ describe('EventEmitter', function() {
     const eventName = crypto.randomBytes(4).toString('hex');
     it('return EventEmitter', function() {
       const Emitter = new EventEmitter();
-      should(Emitter.on(eventName, tick)).be.equal(Emitter);
+      should(Emitter.once(eventName, tick)).be.equal(Emitter);
     });
 
     it(`eventNames contain ${eventName}`, function() {
       const Emitter = new EventEmitter();
-      Emitter.on(eventName, tick);
+      Emitter.once(eventName, tick);
       should(Emitter.eventNames()).be.containEql(eventName);
     });
 
     it(`event stack should contain ${Object.prototype.toString.call(tick)}`, function() {
       const Emitter = new EventEmitter();
-      Emitter.on(eventName, tick);
+      Emitter.once(eventName, tick);
       should(Emitter.rawListeners(eventName))
         .be.an.Array()
         .and.length(1)
@@ -215,13 +224,13 @@ describe('EventEmitter', function() {
   describe('prependListener', function() {
     const Emitter = new EventEmitter();
     const eventName = crypto.randomBytes(4).toString('hex');
-    const before = async function(order: Array<string>) {
+    const before = async function(order: Array<string>): Promise<void> {
       order.push('before');
     };
-    const after = async function(order: Array<string>) {
+    const after = async function(order: Array<string>): Promise<void> {
       order.push('after');
     };
-    const order: any[] = [];
+    const order: Array<any> = [];
 
     this.beforeAll(async function() {
       Emitter.on(eventName, after);
