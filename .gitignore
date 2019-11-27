@@ -5,6 +5,7 @@ package-lock.json
 .DS_Store
 
 coverage
+.nyc_output
 
 lib/**/*.js
 lib/**/*.js.map
