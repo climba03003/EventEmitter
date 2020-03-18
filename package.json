@@ -20,7 +20,7 @@
     "eslint-plugin-prettier": "^3.1.1",
     "mocha": "^6.2.2",
     "mocha-lcov-reporter": "^1.3.0",
-    "nyc": "^13.0.0",
+    "nyc": "^15.0.0",
     "prettier": "^1.19.1",
     "should": "^13.2.3",
     "typescript": "^3.6.4"
