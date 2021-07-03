@@ -1,6 +1,6 @@
 {
   "name": "@climba03003/event-emitter",
-  "version": "1.0.2",
+  "version": "2.0.0",
   "description": "NodeJS EventEmitter which ensure all the event listener run sequentially. The API is follow the NodeJS API Documents.",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
