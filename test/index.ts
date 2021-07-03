@@ -1,352 +1,396 @@
-import { describe, it } from 'mocha';
-import * as should from 'should';
-import * as crypto from 'crypto';
-import EventEmitter from '../lib';
+import * as crypto from 'crypto'
+import { EventEmitter, Listener } from '../lib'
 
-function tick(): Promise<unknown> {
-  return new Promise(function(resolve) {
-    setTimeout(function() {
-      resolve();
-    }, 500);
-  });
+async function tick (): Promise<void> {
+  return await new Promise(function (resolve) {
+    process.nextTick(function () {
+      resolve()
+    })
+  })
 }
 
-describe('EventEmitter', function() {
-  describe('constructor', function() {
-    const Emitter: any = new EventEmitter();
-    it('defaultMaxListeners is 10', function() {
-      should(Emitter.defaultMaxListeners)
-        .be.a.Number()
-        .and.equal(10);
-    });
+describe('EventEmitter', function () {
+  beforeEach(function () {
+    // reset EventEmitter constant
+    EventEmitter.defaultMaxListeners = 10
+  })
 
-    it('events is {}', function() {
-      should(Emitter.events).be.a.Object();
-      should(String(Emitter.events)).equal(String({}));
-    });
-  });
+  afterEach(function () {
+    process.removeAllListeners('warning')
+  })
 
-  describe('addListener', function() {
-    const eventName = crypto.randomBytes(4).toString('hex');
-    it('return EventEmitter', function() {
-      const Emitter = new EventEmitter();
-      should(Emitter.on(eventName, tick)).be.equal(Emitter);
-    });
+  describe('constant', function () {
+    test('defaultMaxListeners is 10', function () {
+      expect(EventEmitter.defaultMaxListeners).toStrictEqual(10)
+    })
 
-    it(`eventNames contain ${eventName}`, function() {
-      const Emitter = new EventEmitter();
-      Emitter.on(eventName, tick);
-      should(Emitter.eventNames()).be.containEql(eventName);
-    });
+    test('defaultMaxListeners = 11', function () {
+      EventEmitter.defaultMaxListeners = 11
+      expect(EventEmitter.defaultMaxListeners).toStrictEqual(11)
+    })
 
-    it(`event stack should contain ${Object.prototype.toString.call(tick)}`, function() {
-      const Emitter = new EventEmitter();
-      Emitter.on(eventName, tick);
-      should(Emitter.rawListeners(eventName))
-        .be.an.Array()
-        .and.length(1)
-        .and.containEql(tick);
-    });
+    test('defaultMaxListeners = -1', function () {
+      expect(() => { EventEmitter.defaultMaxListeners = -1 }).toThrowError()
+    })
 
-    it('event stack should throw error', function() {
-      const Emitter = new EventEmitter();
-      Emitter.setMaxListeners(1);
-      should(function() {
-        Emitter.addListener('exceed', tick);
-        Emitter.addListener('exceed', tick);
-      }).throwError('Maximum Number of Event Listener exceed.');
-    });
-  });
+    test('defaultMaxListeners = null', function () {
+      expect(() => { EventEmitter.defaultMaxListeners = 'null' as any }).toThrowError()
+    })
+  })
 
-  describe('emit', function() {
-    const Emitter = new EventEmitter();
-    const eventName = crypto.randomBytes(4).toString('hex');
-    const before = async function(order: Array<string>) {
-      order.push('before');
+  describe('constructor', function () {
+    test('maxListeners', function () {
+      const ee = new EventEmitter()
+      expect(ee.getMaxListeners()).toStrictEqual(10)
+    })
+
+    test('maxListeners = 11', function () {
+      EventEmitter.defaultMaxListeners = 11
+      const ee = new EventEmitter()
+      expect(ee.getMaxListeners()).toStrictEqual(11)
+    })
+  })
+
+  describe('addListener', function () {
+    const eventName = crypto.randomBytes(4).toString('hex')
+    test('chainable', function () {
+      const ee = new EventEmitter()
+      expect(ee.addListener(eventName, tick)).toBeInstanceOf(EventEmitter)
+    })
+
+    test(`eventNames include ${eventName}`, function () {
+      const ee = new EventEmitter()
+      ee.addListener(eventName, tick)
+      expect(ee.eventNames()).toContainEqual(eventName)
+    })
+
+    test(`rawListeners include ${Object.prototype.toString.call(tick)}`, function () {
+      const ee = new EventEmitter()
+      ee.addListener(eventName, tick)
+      expect(ee.rawListeners(eventName)).toContainEqual(tick)
+    })
+
+    test('emit Warning', function () {
+      const ee = new EventEmitter()
+      ee.setMaxListeners(1)
+      process.on('warning', function (warning) {
+        expect(warning.name).toStrictEqual('MaxListenersExceededWarning')
+      })
+      ee.addListener(eventName, tick)
+      ee.addListener(eventName, tick)
+    })
+  })
+
+  describe('emit', function () {
+    const eventName = crypto.randomBytes(4).toString('hex')
+    const ee = new EventEmitter()
+    const order: string[] = []
+    async function before (order: string[]): Promise<void> {
+      return await new Promise(function (resolve) {
+        process.nextTick(function () {
+          order.push('before')
+          resolve()
+        })
+      })
     };
-    const after = async function(order: Array<string>) {
-      order.push('after');
+    async function after (order: string[]): Promise<void> {
+      return await new Promise(function (resolve) {
+        process.nextTick(function () {
+          order.push('after')
+          resolve()
+        })
+      })
     };
-    const order: any[] = [];
 
-    this.beforeAll(async function() {
-      Emitter.on(eventName, after);
-      Emitter.prependListener(eventName, before);
+    ee.addListener(eventName, before)
+    ee.addListener(eventName, after)
 
-      await Emitter.emit(eventName, order);
-      await Emitter.emit(eventName, order);
-    });
+    test('stack length = 2', function () {
+      expect(ee.listenerCount(eventName)).toStrictEqual(2)
+    })
 
-    it('stack length is 2', async function() {
-      should(Emitter.listenerCount(eventName))
-        .be.Number()
-        .and.equal(2);
-    });
+    test('emit order', async function () {
+      await ee.emit(eventName, order)
+      expect(order).toHaveLength(2)
+      expect(order[0]).toStrictEqual('before')
+      expect(order[1]).toStrictEqual('after')
+    })
+  })
 
-    it('in correct order', function() {
-      should(order)
-        .be.Array()
-        .and.containDeepOrdered(['before', 'after', 'before', 'after']);
-    });
-  });
+  describe('eventNames', function () {
+    const ee = new EventEmitter()
+    const events = [
+      crypto.randomBytes(4).toString('hex'),
+      crypto.randomBytes(4).toString('hex')
+    ]
+    ee.addListener(events[0], tick)
+    ee.addListener(events[1], tick)
 
-  describe('eventNames', function() {
-    const Emitter = new EventEmitter();
-    const randomName = function() {
-      return crypto.randomBytes(4).toString('hex');
-    };
-    const eventNames = [];
-    eventNames.push(randomName());
-    eventNames.push(randomName());
-    eventNames.forEach(function(eventName) {
-      Emitter.on(eventName, tick);
-    });
-    it('length is 2', function() {
-      should(Emitter.eventNames())
-        .be.Array()
-        .length(2);
-    });
-  });
+    test('stack length = 2', function () {
+      expect(ee.eventNames()).toHaveLength(2)
+    })
 
-  describe('getMaxListeners', function() {
-    it('equal to 10', function() {
-      const Emitter = new EventEmitter();
-      should(Emitter.getMaxListeners())
-        .be.Number()
-        .and.equal(10);
-    });
-  });
+    test(`eventNames = [${events[0]},${events[1]}]`, function () {
+      const names = ee.eventNames()
+      expect(names[0]).toStrictEqual(events[0])
+      expect(names[1]).toStrictEqual(events[1])
+    })
+  })
 
-  describe('listenerCount', function() {
-    const eventName = crypto.randomBytes(4).toString('hex');
-    const random = Math.floor(Math.random() * 10 + 1);
-    it('empty as default', function() {
-      const Emitter = new EventEmitter();
-      should(Emitter.listenerCount(eventName))
-        .be.Number()
-        .and.equal(0);
-    });
+  describe('getMaxListeners', function () {
+    const ee = new EventEmitter()
+    test('= 10', function () {
+      expect(ee.getMaxListeners()).toStrictEqual(10)
+    })
+  })
 
-    it(`event stack should increase to ${random}`, function() {
-      const Emitter = new EventEmitter();
-      let count = 1;
+  describe('listenerCount', function () {
+    const eventName = crypto.randomBytes(4).toString('hex')
+    const random = Math.floor(Math.random() * 10 + 1)
+    const ee = new EventEmitter()
+
+    test('empty at default', function () {
+      expect(ee.listenerCount(eventName)).toStrictEqual(0)
+    })
+
+    test(`event stack should increase to ${random}`, function () {
+      let count = 1
       while (count <= random) {
-        Emitter.on(eventName, tick);
-        count++;
+        ee.on(eventName, tick)
+        count++
       }
-      should(Emitter.listenerCount(eventName))
-        .be.Number()
-        .and.equal(random);
-    });
-  });
+      expect(ee.listenerCount(eventName)).toStrictEqual(random)
+    })
+  })
 
-  describe('listeners', function() {
-    const eventName = crypto.randomBytes(4).toString('hex');
-    const random = Math.floor(Math.random() * 10 + 1);
-    it('empty as default', function() {
-      const Emitter = new EventEmitter();
-      should(Emitter.listeners(eventName))
-        .be.an.Array()
-        .and.length(0);
-    });
+  describe('listeners', function () {
+    const eventName = crypto.randomBytes(4).toString('hex')
+    const random = Math.floor(Math.random() * 10 + 1)
+    const ee = new EventEmitter()
 
-    it(`event stack should increase to ${random}`, function() {
-      const Emitter = new EventEmitter();
-      let count = 1;
+    test('empty at default', function () {
+      expect(ee.listeners(eventName)).toHaveLength(0)
+    })
+
+    test(`event stack should increase to ${random}`, function () {
+      let count = 1
       while (count <= random) {
-        Emitter.on(eventName, tick);
-        count++;
+        ee.on(eventName, tick)
+        count++
       }
-      should(Emitter.listeners(eventName))
-        .be.an.Array()
-        .and.length(random);
-    });
-  });
+      expect(ee.listeners(eventName)).toHaveLength(random)
+      ee.listeners(eventName).forEach(function (l) {
+        expect(l).toBeInstanceOf(Listener)
+      })
+    })
+  })
 
-  describe('off', function() {
-    const Emitter = new EventEmitter();
-    const eventName = crypto.randomBytes(4).toString('hex');
-    it('event stack not contain anything', function() {
-      Emitter.on(eventName, tick);
-      Emitter.off(eventName, tick);
-      should(Emitter.listeners(eventName))
-        .is.Array()
-        .and.length(0);
-    });
-  });
+  describe('off', function () {
+    const ee = new EventEmitter()
+    const eventName = crypto.randomBytes(4).toString('hex')
 
-  describe('on', function() {
-    const eventName = crypto.randomBytes(4).toString('hex');
-    it('return EventEmitter', function() {
-      const Emitter = new EventEmitter();
-      should(Emitter.on(eventName, tick)).be.equal(Emitter);
-    });
+    test('remove one listener at a time', function () {
+      ee.addListener(eventName, tick)
+      ee.addListener(eventName, tick)
+      ee.off(eventName, tick)
 
-    it(`eventNames contain ${eventName}`, function() {
-      const Emitter = new EventEmitter();
-      Emitter.on(eventName, tick);
-      should(Emitter.eventNames()).be.containEql(eventName);
-    });
+      expect(ee.listenerCount(eventName)).toStrictEqual(1)
+    })
 
-    it(`event stack should contain ${Object.prototype.toString.call(tick)}`, function() {
-      const Emitter = new EventEmitter();
-      Emitter.on(eventName, tick);
-      should(Emitter.rawListeners(eventName))
-        .be.an.Array()
-        .and.length(1)
-        .and.containEql(tick);
-    });
-  });
+    test('remove more than stack', function () {
+      ee.off(eventName, tick)
+      ee.off(eventName, tick)
 
-  describe('once', function() {
-    const eventName = crypto.randomBytes(4).toString('hex');
-    it('return EventEmitter', function() {
-      const Emitter = new EventEmitter();
-      should(Emitter.once(eventName, tick)).be.equal(Emitter);
-    });
+      expect(ee.listenerCount(eventName)).toStrictEqual(0)
+    })
+  })
 
-    it(`eventNames contain ${eventName}`, function() {
-      const Emitter = new EventEmitter();
-      Emitter.once(eventName, tick);
-      should(Emitter.eventNames()).be.containEql(eventName);
-    });
+  describe('on', function () {
+    const eventName = crypto.randomBytes(4).toString('hex')
+    test('chainable', function () {
+      const ee = new EventEmitter()
+      expect(ee.on(eventName, tick)).toBeInstanceOf(EventEmitter)
+    })
 
-    it(`event stack should contain ${Object.prototype.toString.call(tick)}`, function() {
-      const Emitter = new EventEmitter();
-      Emitter.once(eventName, tick);
-      should(Emitter.rawListeners(eventName))
-        .be.an.Array()
-        .and.length(1)
-        .and.containEql(tick);
-    });
-  });
+    test(`eventNames include ${eventName}`, function () {
+      const ee = new EventEmitter()
+      ee.on(eventName, tick)
+      expect(ee.eventNames()).toContainEqual(eventName)
+    })
 
-  describe('prependListener', function() {
-    const Emitter = new EventEmitter();
-    const eventName = crypto.randomBytes(4).toString('hex');
-    const before = async function(order: Array<string>): Promise<void> {
-      order.push('before');
+    test(`rawListeners include ${Object.prototype.toString.call(tick)}`, function () {
+      const ee = new EventEmitter()
+      ee.on(eventName, tick)
+      expect(ee.rawListeners(eventName)).toContainEqual(tick)
+    })
+
+    test('emit Warning', function () {
+      const ee = new EventEmitter()
+      ee.setMaxListeners(1)
+      process.on('warning', function (warning) {
+        expect(warning.name).toStrictEqual('MaxListenersExceededWarning')
+      })
+      ee.on(eventName, tick)
+      ee.on(eventName, tick)
+    })
+  })
+
+  describe('once', function () {
+    const eventName = crypto.randomBytes(4).toString('hex')
+    test('chainable', function () {
+      const ee = new EventEmitter()
+      expect(ee.once(eventName, tick)).toBeInstanceOf(EventEmitter)
+    })
+
+    test(`eventNames include ${eventName}`, function () {
+      const ee = new EventEmitter()
+      ee.once(eventName, tick)
+      expect(ee.eventNames()).toContainEqual(eventName)
+    })
+
+    test(`rawListeners include ${Object.prototype.toString.call(tick)}`, function () {
+      const ee = new EventEmitter()
+      ee.once(eventName, tick)
+      expect(ee.rawListeners(eventName)).toContainEqual(tick)
+    })
+
+    test('emit Warning', function () {
+      const ee = new EventEmitter()
+      ee.setMaxListeners(1)
+      process.on('warning', function (warning) {
+        expect(warning.name).toStrictEqual('MaxListenersExceededWarning')
+      })
+      ee.once(eventName, tick)
+      ee.once(eventName, tick)
+    })
+  })
+
+  describe('prependListener', function () {
+    const eventName = crypto.randomBytes(4).toString('hex')
+    const ee = new EventEmitter()
+    const order: string[] = []
+    async function before (order: string[]): Promise<void> {
+      return await new Promise(function (resolve) {
+        process.nextTick(function () {
+          order.push('before')
+          resolve()
+        })
+      })
     };
-    const after = async function(order: Array<string>): Promise<void> {
-      order.push('after');
+    async function after (order: string[]): Promise<void> {
+      return await new Promise(function (resolve) {
+        process.nextTick(function () {
+          order.push('after')
+          resolve()
+        })
+      })
     };
-    const order: Array<any> = [];
 
-    this.beforeAll(async function() {
-      Emitter.on(eventName, after);
-      Emitter.prependListener(eventName, before);
+    ee.addListener(eventName, after)
+    ee.prependListener(eventName, before)
 
-      await Emitter.emit(eventName, order);
-      await Emitter.emit(eventName, order);
-    });
+    test('stack length = 2', function () {
+      expect(ee.listenerCount(eventName)).toStrictEqual(2)
+    })
 
-    it('stack length is 2', async function() {
-      should(Emitter.listenerCount(eventName))
-        .be.Number()
-        .and.equal(2);
-    });
+    test('emit order', async function () {
+      await ee.emit(eventName, order)
+      await ee.emit(eventName, order)
+      expect(order).toHaveLength(4)
+      expect(order[0]).toStrictEqual('before')
+      expect(order[1]).toStrictEqual('after')
+      expect(order[2]).toStrictEqual('before')
+      expect(order[3]).toStrictEqual('after')
+    })
+  })
 
-    it('in correct order', function() {
-      should(order)
-        .be.Array()
-        .and.containDeepOrdered(['before', 'after', 'before', 'after']);
-    });
-  });
-
-  describe('prependOnceListener', function() {
-    const Emitter = new EventEmitter();
-    const eventName = crypto.randomBytes(4).toString('hex');
-    const before = async function(order: Array<string>) {
-      order.push('before');
+  describe('prependOnceListener', function () {
+    const eventName = crypto.randomBytes(4).toString('hex')
+    const ee = new EventEmitter()
+    const order: string[] = []
+    async function before (order: string[]): Promise<void> {
+      return await new Promise(function (resolve) {
+        process.nextTick(function () {
+          order.push('before')
+          resolve()
+        })
+      })
     };
-    const after = async function(order: Array<string>) {
-      order.push('after');
+    async function after (order: string[]): Promise<void> {
+      return await new Promise(function (resolve) {
+        process.nextTick(function () {
+          order.push('after')
+          resolve()
+        })
+      })
     };
-    const order: any[] = [];
 
-    this.beforeAll(async function() {
-      Emitter.on(eventName, after);
-      Emitter.prependOnceListener(eventName, before);
+    ee.addListener(eventName, after)
+    ee.prependOnceListener(eventName, before)
 
-      await Emitter.emit(eventName, order);
-      await Emitter.emit(eventName, order);
-    });
+    test('stack length = 2', function () {
+      expect(ee.listenerCount(eventName)).toStrictEqual(2)
+    })
 
-    it('stack length is 2', async function() {
-      should(Emitter.listenerCount(eventName))
-        .be.Number()
-        .and.equal(2);
-    });
+    test('emit order', async function () {
+      await ee.emit(eventName, order)
+      await ee.emit(eventName, order)
+      expect(order).toHaveLength(3)
+      expect(order[0]).toStrictEqual('before')
+      expect(order[1]).toStrictEqual('after')
+      expect(order[2]).toStrictEqual('after')
+    })
+  })
 
-    it('in correct order', function() {
-      should(order)
-        .be.Array()
-        .and.containDeepOrdered(['before', 'after', 'after']);
-    });
-  });
+  describe('removeAllListeners', function () {
+    const eventName = crypto.randomBytes(4).toString('hex')
+    const ee = new EventEmitter()
+    ee.on(eventName, tick)
+    ee.on(eventName, tick)
 
-  describe('removeAllListeners', function() {
-    const Emitter = new EventEmitter();
-    const eventName = crypto.randomBytes(4).toString('hex');
-    it('event stack not contain anything', function() {
-      Emitter.on(eventName, tick);
-      Emitter.removeAllListeners(eventName);
-      should(Emitter.listeners(eventName))
-        .is.Array()
-        .and.length(0);
-    });
-  });
+    test('empty', function () {
+      ee.removeAllListeners(eventName)
+      expect(ee.listenerCount(eventName)).toStrictEqual(0)
+    })
+  })
 
-  describe('removeListener', function() {
-    const Emitter = new EventEmitter();
-    const eventName = crypto.randomBytes(4).toString('hex');
-    it('event stack not contain anything', function() {
-      Emitter.on(eventName, tick);
-      Emitter.removeListener(eventName, tick);
-      should(Emitter.listeners(eventName))
-        .is.Array()
-        .and.length(0);
-    });
-  });
+  describe('removeListener', function () {
+    const ee = new EventEmitter()
+    const eventName = crypto.randomBytes(4).toString('hex')
 
-  describe('setMaxListeners', function() {
-    const random = Math.floor(Math.random() * 20 + 1);
-    it(`set to ${random}`, function() {
-      const Emitter = new EventEmitter();
-      Emitter.setMaxListeners(random);
-      should(Emitter.getMaxListeners())
-        .be.a.Number()
-        .and.equal(random);
-    });
+    test('remove one listener at a time', function () {
+      ee.addListener(eventName, tick)
+      ee.addListener(eventName, tick)
+      ee.removeListener(eventName, tick)
 
-    it('throw error when n isNaN', function() {
-      const Emitter = new EventEmitter();
-      should(function() {
-        Emitter.setMaxListeners(crypto.randomBytes(4) as any);
-      }).throw('MaxListerners must be a number.');
-    });
-  });
+      expect(ee.listenerCount(eventName)).toStrictEqual(1)
+    })
 
-  describe('rawListeners', function() {
-    const eventName = crypto.randomBytes(4).toString('hex');
-    const random = Math.floor(Math.random() * 10 + 1);
-    it('empty as default', function() {
-      const Emitter = new EventEmitter();
-      should(Emitter.rawListeners(eventName))
-        .be.an.Array()
-        .and.length(0);
-    });
+    test('remove more than stack', function () {
+      ee.removeListener(eventName, tick)
+      ee.removeListener(eventName, tick)
 
-    it(`event stack should increase to ${random}`, function() {
-      const Emitter = new EventEmitter();
-      let count = 1;
-      while (count <= random) {
-        Emitter.on(eventName, tick);
-        count++;
-      }
-      should(Emitter.rawListeners(eventName))
-        .be.an.Array()
-        .and.length(random);
-    });
-  });
-});
+      expect(ee.listenerCount(eventName)).toStrictEqual(0)
+    })
+  })
+
+  describe('setMaxListeners', function () {
+    const ee = new EventEmitter()
+    test('maxListeners is 10', function () {
+      expect(ee.getMaxListeners()).toStrictEqual(10)
+    })
+
+    test('maxListeners = 11', function () {
+      ee.setMaxListeners(11)
+      expect(ee.getMaxListeners()).toStrictEqual(11)
+    })
+
+    test('maxListeners = -1', function () {
+      expect(() => { ee.setMaxListeners(-1) }).toThrowError()
+    })
+
+    test('maxListeners = null', function () {
+      expect(() => { ee.setMaxListeners('null' as any) }).toThrowError()
+    })
+  })
+})
