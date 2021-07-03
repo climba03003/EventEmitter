@@ -16,7 +16,7 @@ export class Listener {
 
   async execute (...args: any[]): Promise<void> {
     if (this.mode === MODE_ONCE && this.executed) {
-
+      return undefined
     } else {
       this.executed = true
       await this.listener.apply(this.listener, args)
@@ -39,7 +39,7 @@ export class EventEmitter {
 
   static set defaultMaxListeners (n: number) {
     if (isNaN(n)) throw new Error('MaxListerners must be a number.')
-    if (!isNaN(n) && n < 0) throw new RangeError('MaxListerners must be a positive number.')
+    if (!isNaN(n) && n < 0) { throw new RangeError('MaxListerners must be a positive number.') }
     EventEmitter[kDefaultMaxListeners] = n
   }
 
@@ -97,7 +97,9 @@ export class EventEmitter {
   }
 
   prependListener (eventName: string | symbol, listener: Function): this {
-    this[kFindEventStack](eventName).unshift(new Listener(listener, MODE_ALWAYS))
+    this[kFindEventStack](eventName).unshift(
+      new Listener(listener, MODE_ALWAYS)
+    )
     this[kCheckMaxListenter](eventName)
     return this
   }
@@ -118,13 +120,15 @@ export class EventEmitter {
     const index = stack.findIndex(function (l) {
       return l.listener === listener
     })
-    if (index !== -1) { stack.splice(index, 1) }
+    if (index !== -1) {
+      stack.splice(index, 1)
+    }
     return this
   }
 
   setMaxListeners (n: number): void {
     if (isNaN(n)) throw new Error('MaxListerners must be a number.')
-    if (!isNaN(n) && n < 0) throw new RangeError('MaxListerners must be a positive number.')
+    if (!isNaN(n) && n < 0) { throw new RangeError('MaxListerners must be a positive number.') }
     this.maxListeners = n
   }
 
